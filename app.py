@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit_webrtc import webrtc_streamer
 import torch
 import numpy as np
 import cv2
@@ -208,18 +209,36 @@ def main():
     elif choice == "Camera(live detection)":
         st.title("Webcam Live Feed")
         run = st.checkbox('Run')
-        FRAME_WINDOW = st.image([])
-        camera = cv2.VideoCapture(0)
-        model = YOLO(f'models/train-yolov8-n-100/weights/best.pt')
-
-        while run:
-            _, frame = camera.read()
-
+    
+        # Placeholder for displaying frames
+        FRAME_WINDOW = st.empty()
+    
+        @st.cache(allow_output_mutation=True)
+        def load_model():
+            return YOLO(f'models/train-yolov8-n-100/weights/best.pt')
+    
+        model = load_model()
+    
+        def transform_frame(frame):
+            # Predict using YOLO model
             results = model.predict(frame)
             annotated_frame = results[0].plot()
+    
+            # Convert BGR image to RGB
             annotated_frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-            FRAME_WINDOW.image(annotated_frame_rgb)
-
+    
+            # Return annotated frame
+            return annotated_frame_rgb
+    
+        webrtc_ctx = webrtc_streamer(
+            key="example",
+            video_processor_factory=transform_frame if run else None,
+            async_processing=True  # Optimize for performance
+        )
+    
+        if webrtc_ctx.video_transformer:
+            # Display the annotated frame
+            FRAME_WINDOW.image(webrtc_ctx.image, channels="RGB", use_column_width=True)
 
 if __name__ == "__main__":
     main()
