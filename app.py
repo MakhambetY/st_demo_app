@@ -1,244 +1,67 @@
+from pathlib import Path
+from PIL import Image
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer
-import torch
-import numpy as np
-import cv2
-import os
-from time import time
-from ultralytics import YOLO
-from ultralytics.utils.plotting import Annotator, colors
 
+import config
+from utils import load_model, infer_uploaded_image, infer_uploaded_video, infer_uploaded_webcam
 
-class ObjectDetection:
-    def __init__(self, capture_index, save = False):
-        """Initializes an ObjectDetection instance with a given camera index."""
-        self.capture_index = capture_index
-        self.save = save
+# setting page layout
+st.set_page_config(
+    page_title="Interactive Interface for YOLOv8",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded"
+    )
 
-        # model information
-        self.model = YOLO("models/train-yolov8-n-100/weights/best.pt")
-        # self.model = YOLO("yolov8n.pt")
+# main page heading
+st.title("Interactive Interface for YOLOv8")
 
-        # visual information
-        self.annotator = None
-        self.start_time = 0
-        self.end_time = 0
+# sidebar
+st.sidebar.header("DL Model Config")
 
-        # device information
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# model options
+task_type = st.sidebar.selectbox(
+    "Select Task",
+    ["Detection"]
+)
 
-    def predict(self, im0):
-        """Run prediction using a YOLO model for the input image `im0`."""
-        results = self.model(im0, conf=0.4)
-        return results
+model_type = None
+if task_type == "Detection":
+    model_type = st.sidebar.selectbox(
+        "Select Model",
+        config.DETECTION_MODEL_LIST
+    )
+else:
+    st.error("Currently only 'Detection' function is implemented")
 
-    def display_fps(self, im0):
-        """Displays the FPS on an image `im0` by calculating and overlaying as white text on a black rectangle."""
-        self.end_time = time()
-        fps = 1 / np.round(self.end_time - self.start_time, 2)
-        text = f'FPS: {int(fps)}'
-        text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 2)[0]
-        gap = 10
-        cv2.rectangle(im0, (20 - gap, 70 - text_size[1] - gap), (20 + text_size[0] + gap, 70 + gap), (255, 255, 255), -1)
-        cv2.putText(im0, text, (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
+confidence = float(st.sidebar.slider(
+    "Select Model Confidence", 30, 100, 50)) / 100
 
-    def plot_bboxes(self, results, im0):
-        """Plots bounding boxes on an image given detection results; returns annotated image and class IDs."""
-        class_ids = []
-        self.annotator = Annotator(im0, 3, results[0].names)
-        boxes = results[0].boxes.xyxy.cpu()
-        clss = results[0].boxes.cls.cpu().tolist()
-        names = results[0].names
-        for box, cls in zip(boxes, clss):
-            class_ids.append(cls)
-            self.annotator.box_label(box, label=names[int(cls)], color=colors(int(cls), True))
-        return im0, class_ids
+model_path = ""
+if model_type:
+    model_path = Path(config.DETECTION_MODEL_DIR, str(model_type))
+else:
+    st.error("Please Select Model in Sidebar")
 
-    def display_total(self, results, im0):
-        classes = results[0].boxes.cls.cpu().tolist()
-        class_names = results[0].names
-        total_kzt = 0
+# load pretrained DL model
+try:
+    model = load_model(model_path)
+except Exception as e:
+    st.error(f"Unable to load model. Please check the specified path: {model_path}")
 
-        # Dictionary to keep track of sign banknotes
-        sign_banknotes = set()
+# image/video options
+st.sidebar.header("Image/Video Config")
+source_selectbox = st.sidebar.selectbox(
+    "Select Source",
+    config.SOURCES_LIST
+)
 
-        for cls in classes:
-            class_name = class_names[int(cls)]
-
-            # Check if it's a KZT banknote
-            if cls <= 5:
-                total_kzt += float(class_name.split('_')[0])
-            # If it's not a KZT banknote, check if it's a sign
-            else:
-                if cls - 6 not in classes:
-                    sign_banknotes.add(class_name)
-
-        for sign in sign_banknotes:
-            kzt_equivalent = int(sign.split('_')[0])
-            total_kzt += kzt_equivalent
-
-        print("Total KZT:", total_kzt)
-        # Display total KZT
-        kzt_text = f'Total KZT: {total_kzt}'
-        kzt_text_size = cv2.getTextSize(kzt_text, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 2)[0]
-        kzt_gap = 10
-        cv2.rectangle(im0, (20 - kzt_gap, 140 - kzt_text_size[1] - kzt_gap), (20 + kzt_text_size[0] + kzt_gap, 140 + kzt_gap), (255, 255, 255), -1)
-        cv2.putText(im0, kzt_text, (20, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
-
-    def __call__(self):
-        """Executes object detection on video frames from a specified camera index, plotting bounding boxes and returning modified frames."""
-        cap = cv2.VideoCapture(self.capture_index)
-        assert cap.isOpened()
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-        # Get video properties
-        ret, frame = cap.read()
-        if not ret:
-            raise ValueError("Unable to read video frame.")
-        H, W, _ = frame.shape
-        video_path_out = 'results/video_out_total.mp4'
-        # Initialize output video writer
-        out = cv2.VideoWriter(video_path_out, cv2.VideoWriter_fourcc(*'MP4V'), int(cap.get(cv2.CAP_PROP_FPS)), (W, H))
-        if not out.isOpened():
-            raise IOError("Unable to create video writer.")
-
-        frame_count = 0
-        while cap.isOpened():
-            self.start_time = time()
-            ret, im0 = cap.read()
-            assert ret
-            results = self.predict(im0)
-            im0, class_ids = self.plot_bboxes(results, im0)
-
-            self.display_fps(im0)
-            self.display_total(results, im0)
-            # Assuming you have an image loaded as 'frame'
-            if self.save is True:
-                # Write processed frame to output video
-                out.write(im0)
-            # Get current frame dimensions
-            height, width = im0.shape[:2]
-
-            # Reduce the size by half twice (adjust factor as needed)
-            new_width = int(width / 2)
-            new_height = int(height / 2)
-
-            # Resize the frame (optional, for better quality)
-            im0 = cv2.resize(im0, (new_width, new_height), interpolation=cv2.INTER_AREA)
-            cv2.imshow('YOLOv8 Detection', im0)
-
-            frame_count += 1
-            if cv2.waitKey(5) & 0xFF == 27:
-                break
-        cap.release()
-        out.release()
-        cv2.destroyAllWindows()
-
-
-def main():
-    VIDEOS_DIR = "source/"
-    st.title("Banknote Detection")
-
-    st.sidebar.write("")
-    st.sidebar.write("")
-    st.sidebar.write("")
-    st.sidebar.write("**Select an option ** ")
-    st.sidebar.write("")
-
-    activities = [
-        "Video(Video detection)", "Camera(live detection)"]
-    choice = st.sidebar.selectbox("select an option", activities)
-
-    if choice == "Video(Video detection)":
-        # Allow user to upload a video file
-        video_file = st.file_uploader("Upload Video", type=['avi', 'mp4', 'mov'])
-
-        if video_file:
-            # Save the uploaded video file
-            with open("uploaded_video.mp4", "wb") as f:
-                f.write(video_file.read())
-
-            # Define output video path
-            video_path_out = 'results/video_out_total.mp4'
-
-            # Check if the uploaded video file exists
-            if os.path.exists("uploaded_video.mp4"):
-                # Open the video file
-                cap = cv2.VideoCapture("uploaded_video.mp4")
-                if not cap.isOpened():
-                    raise IOError("Unable to open video file.")
-
-                # Get video properties
-                ret, frame = cap.read()
-                if not ret:
-                    raise ValueError("Unable to read video frame.")
-                H, W, _ = frame.shape
-
-                # Initialize output video writer
-                out = cv2.VideoWriter(video_path_out, cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)),
-                                      (W, H))
-                if not out.isOpened():
-                    raise IOError(
-                        "Unable to create video writer. Please check if the output file path exists and Streamlit has write permissions.")
-
-                # Load YOLO model
-                model = YOLO(f'models/train-yolov8-n-100/weights/best.pt')
-
-                # Process each frame of the video
-                while cap.isOpened():
-                    success, frame = cap.read()
-
-                    if success:
-                        # Predict using YOLO model
-                        results = model.predict(frame)
-                        annotated_frame = results[0].plot()
-                        out.write(annotated_frame)
-
-                    else:
-                        break
-
-                # Release resources
-                cap.release()
-                out.release()
-
-                # Display annotated video
-                with open(video_path_out, "rb") as video_file:
-                    video_bytes = video_file.read()
-                st.video(video_bytes)
-    elif choice == "Camera(live detection)":
-        st.title("Webcam Live Feed")
-        run = st.checkbox('Run')
-    
-        # Placeholder for displaying frames
-        FRAME_WINDOW = st.empty()
-    
-        @st.cache(allow_output_mutation=True)
-        def load_model():
-            return YOLO(f'models/train-yolov8-n-100/weights/best.pt')
-    
-        model = load_model()
-    
-        def transform_frame(frame):
-            # Predict using YOLO model
-            results = model.predict(frame)
-            annotated_frame = results[0].plot()
-    
-            # Convert BGR image to RGB
-            annotated_frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-    
-            # Return annotated frame
-            return annotated_frame_rgb
-    
-        webrtc_ctx = webrtc_streamer(
-            key="example",
-            video_processor_factory=transform_frame if run else None,
-            async_processing=True  # Optimize for performance
-        )
-    
-        if webrtc_ctx.video_transformer:
-            # Display the annotated frame
-            FRAME_WINDOW.image(webrtc_ctx.image, channels="RGB", use_column_width=True)
-
-if __name__ == "__main__":
-    main()
+source_img = None
+if source_selectbox == config.SOURCES_LIST[0]: # Image
+    infer_uploaded_image(confidence, model)
+elif source_selectbox == config.SOURCES_LIST[1]: # Video
+    infer_uploaded_video(confidence, model)
+elif source_selectbox == config.SOURCES_LIST[2]: # Webcam
+    infer_uploaded_webcam(confidence, model)
+else:
+    st.error("Currently only 'Image' and 'Video' source are implemented")
