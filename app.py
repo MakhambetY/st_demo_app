@@ -150,15 +150,21 @@ def main():
     choice = st.sidebar.selectbox("select an option", activities)
 
     if choice == "Video(Video detection)":
-        video_file = st.file_uploader(
-            "Upload Video", type=['avi', 'mp4', 'mov'])
-        if video_file:
-            with open(video_file, "wb") as f:
-                f.write(video_file.getbuffer())
+        # Allow user to upload a video file
+        video_file = st.file_uploader("Upload Video", type=['avi', 'mp4', 'mov'])
 
+        if video_file:
+            # Save the uploaded video file
+            with open("uploaded_video.mp4", "wb") as f:
+                f.write(video_file.read())
+
+            # Define output video path
             video_path_out = 'results/video_out_total.mp4'
-            if os.path.exists(video_file):
-                cap = cv2.VideoCapture(video_file)
+
+            # Check if the uploaded video file exists
+            if os.path.exists("uploaded_video.mp4"):
+                # Open the video file
+                cap = cv2.VideoCapture("uploaded_video.mp4")
                 if not cap.isOpened():
                     raise IOError("Unable to open video file.")
 
@@ -167,17 +173,22 @@ def main():
                 if not ret:
                     raise ValueError("Unable to read video frame.")
                 H, W, _ = frame.shape
-                out = cv2.VideoWriter(video_path_out, cv2.VideoWriter_fourcc(*'h264'), int(cap.get(cv2.CAP_PROP_FPS)),
+
+                # Initialize output video writer
+                out = cv2.VideoWriter(video_path_out, cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)),
                                       (W, H))
                 if not out.isOpened():
                     raise IOError("Unable to create video writer.")
 
+                # Load YOLO model
                 model = YOLO(f'models/train-yolov8-n-100/weights/best.pt')
 
+                # Process each frame of the video
                 while cap.isOpened():
                     success, frame = cap.read()
 
                     if success:
+                        # Predict using YOLO model
                         results = model.predict(frame)
                         annotated_frame = results[0].plot()
                         out.write(annotated_frame)
@@ -188,7 +199,8 @@ def main():
                 # Release resources
                 cap.release()
                 out.release()
-                # cv2.destroyAllWindows()
+
+                # Display annotated video
                 with open(video_path_out, "rb") as video_file:
                     video_bytes = video_file.read()
                 st.video(video_bytes)
