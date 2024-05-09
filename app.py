@@ -178,7 +178,8 @@ def main():
                 out = cv2.VideoWriter(video_path_out, cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)),
                                       (W, H))
                 if not out.isOpened():
-                    raise IOError("Unable to create video writer.")
+                    raise IOError(
+                        "Unable to create video writer. Please check if the output file path exists and Streamlit has write permissions.")
 
                 # Load YOLO model
                 model = YOLO(f'models/train-yolov8-n-100/weights/best.pt')
