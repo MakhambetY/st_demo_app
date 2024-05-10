@@ -182,15 +182,34 @@ class VideoProcessor:
 
 
 def infer_uploaded_webcam(conf, model):
-    """
-    Execute inference for webcam.
-    :param conf: Confidence of YOLOv8 model
-    :param model: An instance of the `YOLOv8` class containing the YOLOv8 model.
-    :return: None
-    """
+    st.title("Webcam with Red Circle")
 
     stframe = st.empty()
 
-    webrtc_streamer(key="example")
+    cap = cv2.VideoCapture(0)  # Open the default camera (0)
+    if not cap.isOpened():
+        st.warning("Could not open the camera.")
+        return
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            st.warning("Could not read from the camera.")
+            break
+
+        # Get the dimensions of the frame
+        height, width = frame.shape[:2]
+
+        # Draw a red circle in the center of the frame
+        center = (width // 2, height // 2)
+        radius = 50
+        color = (0, 0, 255)  # Red color (BGR format)
+        thickness = 2
+        cv2.circle(frame, center, radius, color, thickness)
+
+        # Display the frame with the red circle
+        stframe.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB")
+
+    cap.release()
 
 
