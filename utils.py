@@ -200,6 +200,6 @@ class VideoTransformer(VideoTransformerBase):
 def infer_uploaded_webcam(conf, model):
     st.title("Webcam with Red Circle")
 
-    webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
+    webrtc_streamer(key="example", video_transformer_factory=VideoTransformer, async_transform=True)
 
 
