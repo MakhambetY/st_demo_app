@@ -162,6 +162,9 @@ class VideoProcessor:
         self.model = model
         self.stframe = stframe
 
+    def __call__(self):
+    return self
+
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
 
