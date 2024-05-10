@@ -191,6 +191,6 @@ def infer_uploaded_webcam(conf, model):
 
     stframe = st.empty()
 
-    webrtc_streamer(key="example", video_processor_factory=VideoProcessor(conf, model, stframe))
+    webrtc_streamer(key="example", video_processor_factory=VideoProcessor(conf, model, stframe), async_processing=True)
 
 
