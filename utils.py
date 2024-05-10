@@ -3,6 +3,7 @@ import streamlit as st
 import cv2
 from PIL import Image
 import tempfile
+from streamlit_webrtc import webrtc_streamer
 
 
 def _display_detected_frames(conf, model, st_frame, image):
@@ -88,48 +89,6 @@ def infer_uploaded_image(conf, model):
                         st.write("No image is uploaded yet!")
                         st.write(ex)
 
-
-# def infer_uploaded_video(conf, model):
-#     """
-#     Execute inference for uploaded video
-#     :param conf: Confidence of YOLOv8 model
-#     :param model: An instance of the `YOLOv8` class containing the YOLOv8 model.
-#     :return: None
-#     """
-#     source_video = st.sidebar.file_uploader(
-#         label="Choose a video..."
-#     )
-
-#     if source_video:
-#         st.video(source_video)
-
-#     if source_video:
-#         if st.button("Execution"):
-#             with st.spinner("Running..."):
-#                 try:
-#                     tfile = tempfile.NamedTemporaryFile()
-#                     tfile.write(source_video.read())
-#                     vid_cap = cv2.VideoCapture(
-#                         tfile.name)
-#                     st_frame = st.empty()
-#                     while (vid_cap.isOpened()):
-#                         success, image = vid_cap.read()
-#                         if success:
-#                             _display_detected_frames(conf,
-#                                                      model,
-#                                                      st_frame,
-#                                                      image
-#                                                      )
-#                         else:
-#                             vid_cap.release()
-#                             break
-#                 except Exception as e:
-#                     st.error(f"Error loading video: {e}")
-
-import cv2
-import streamlit as st
-import tempfile
-
 def infer_uploaded_video(conf, model):
     """
     Execute inference for uploaded video
@@ -204,23 +163,30 @@ def infer_uploaded_webcam(conf, model):
     :param model: An instance of the `YOLOv8` class containing the YOLOv8 model.
     :return: None
     """
+
     try:
         flag = st.button(
             label="Stop running"
         )
-        vid_cap = cv2.VideoCapture(0)  # local camera
+        # vid_cap = cv2.VideoCapture(0)  # local camera
         st_frame = st.empty()
-        while not flag:
-            success, image = vid_cap.read()
-            if success:
-                _display_detected_frames(
-                    conf,
-                    model,
-                    st_frame,
-                    image
-                )
-            else:
-                vid_cap.release()
-                break
+
+        def transform_frame(frame):
+            # Display the detected objects on the frame
+            return _display_detected_frames(conf, model, st_frame, frame) if not flag else frame
+
+        webrtc_streamer(key="example", video_processor_factory=transform_frame if flag else None)
+        # while not flag:
+        # success, image = vid_cap.read()
+        # if success:
+        #     _display_detected_frames(
+        #         conf,
+        #         model,
+        #         st_frame,
+        #         image
+        #     )
+        # else:
+        #     vid_cap.release()
+        #     break
     except Exception as e:
         st.error(f"Error loading video: {str(e)}")
