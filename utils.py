@@ -163,12 +163,35 @@ def infer_uploaded_webcam(conf, model):
     :param model: An instance of the `YOLOv8` class containing the YOLOv8 model.
     :return: None
     """
-    st.header("Webcam Live Feed")
-    stframe = st.empty()
 
-    webcam = st.camera_input("Webcam")
-    if webcam:
-        # Process the webcam frame
-        frame = _display_detected_frames(conf, model, stframe, webcam)
+    try:
+        flag = st.button(
+            label="Stop running"
+        )
+        # vid_cap = cv2.VideoCapture(0)  # local camera
+        st_frame = st.empty()
+        webcam = st.camera_input("Webcam")
+
+        def transform_frame(frame):
+            # Display the detected objects on the frame
+            return _display_detected_frames(conf, model, st_frame, frame) if not flag else frame
+
+        # webrtc_streamer(key="example", video_processor_factory=transform_frame if flag else None)
+        while webcam and not flag:
+            # Convert the webcam frame to a numpy array
+            frame_np = cv2.imdecode(np.frombuffer(webcam.read(), np.uint8), cv2.IMREAD_COLOR)
+
+            if webcam:
+                _display_detected_frames(
+                    conf,
+                    model,
+                    st_frame,
+                    frame_np
+                )
+            else:
+                # vid_cap.release()
+                break
+    except Exception as e:
+        st.error(f"Error loading video: {str(e)}")
 
 
