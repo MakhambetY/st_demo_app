@@ -3,7 +3,7 @@ import streamlit as st
 import cv2
 from PIL import Image
 import tempfile
-from streamlit_webrtc import webrtc_streamer
+from streamlit_webrtc import VideoTransformerBase, webrtc_streamer
 
 
 def _display_detected_frames(conf, model, st_frame, image):
@@ -180,36 +180,26 @@ class VideoProcessor:
         # Display the processed frame
         self.stframe.image(res_plotted, channels="BGR")
 
-
-def infer_uploaded_webcam(conf, model):
-    st.title("Webcam with Red Circle")
-
-    stframe = st.empty()
-
-    cap = cv2.VideoCapture(0)  # Open the default camera (0)
-    if not cap.isOpened():
-        st.warning("Could not open the camera.")
-        return
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            st.warning("Could not read from the camera.")
-            break
+class VideoTransformer(VideoTransformerBase):
+    def transform(self, frame):
+        img = frame.to_ndarray(format="bgr24")
 
         # Get the dimensions of the frame
-        height, width = frame.shape[:2]
+        height, width = img.shape[:2]
 
         # Draw a red circle in the center of the frame
         center = (width // 2, height // 2)
         radius = 50
         color = (0, 0, 255)  # Red color (BGR format)
         thickness = 2
-        cv2.circle(frame, center, radius, color, thickness)
+        cv2.circle(img, center, radius, color, thickness)
 
-        # Display the frame with the red circle
-        stframe.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB")
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-    cap.release()
+
+def infer_uploaded_webcam(conf, model):
+    st.title("Webcam with Red Circle")
+
+    webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
 
 
