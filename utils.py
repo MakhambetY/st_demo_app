@@ -156,6 +156,28 @@ def infer_uploaded_video(conf, model):
                     st.error(f"Error loading video: {e}")
 
 
+class VideoProcessor:
+    def __init__(self, conf, model, stframe):
+        self.conf = conf
+        self.model = model
+        self.stframe = stframe
+
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+
+        # Resize the image to a standard size
+        img = cv2.resize(img, (720, int(720 * (9 / 16))))
+
+        # Predict the objects in the image using YOLOv8 model
+        res = self.model.predict(img, conf=self.conf)
+
+        # Plot the detected objects on the video frame
+        res_plotted = res[0].plot()
+
+        # Display the processed frame
+        self.stframe.image(res_plotted, channels="BGR")
+
+
 def infer_uploaded_webcam(conf, model):
     """
     Execute inference for webcam.
@@ -164,34 +186,8 @@ def infer_uploaded_webcam(conf, model):
     :return: None
     """
 
-    try:
-        flag = st.button(
-            label="Stop running"
-        )
-        # vid_cap = cv2.VideoCapture(0)  # local camera
-        st_frame = st.empty()
-        webcam = st.camera_input("Webcam")
+    stframe = st.empty()
 
-        def transform_frame(frame):
-            # Display the detected objects on the frame
-            return _display_detected_frames(conf, model, st_frame, frame) if not flag else frame
-
-        # webrtc_streamer(key="example", video_processor_factory=transform_frame if flag else None)
-        while webcam and not flag:
-            # Convert the webcam frame to a numpy array
-            frame_np = cv2.imdecode(np.frombuffer(webcam.read(), np.uint8), cv2.IMREAD_COLOR)
-
-            if webcam:
-                _display_detected_frames(
-                    conf,
-                    model,
-                    st_frame,
-                    frame_np
-                )
-            else:
-                # vid_cap.release()
-                break
-    except Exception as e:
-        st.error(f"Error loading video: {str(e)}")
+    webrtc_streamer(key="example", video_processor_factory=VideoProcessor(conf, model, stframe))
 
 
