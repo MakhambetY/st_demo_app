@@ -1,9 +1,14 @@
+import numpy as np
 from ultralytics import YOLO
 import streamlit as st
 import cv2
 from PIL import Image
 import tempfile
-from streamlit_webrtc import VideoTransformerBase, webrtc_streamer
+from streamlit_webrtc import webrtc_streamer
+
+import av
+from turn import get_ice_servers
+from streamlit_session_memo import st_session_memo
 
 
 def _display_detected_frames(conf, model, st_frame, image):
@@ -155,51 +160,40 @@ def infer_uploaded_video(conf, model):
                 except Exception as e:
                     st.error(f"Error loading video: {e}")
 
-
-class VideoProcessor:
-    def __init__(self, conf, model, stframe):
-        self.conf = conf
-        self.model = model
-        self.stframe = stframe
-
-    def __call__(self):
-        return self
-
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-
-        # Resize the image to a standard size
-        img = cv2.resize(img, (720, int(720 * (9 / 16))))
-
-        # Predict the objects in the image using YOLOv8 model
-        res = self.model.predict(img, conf=self.conf)
-
-        # Plot the detected objects on the video frame
-        res_plotted = res[0].plot()
-
-        # Display the processed frame
-        self.stframe.image(res_plotted, channels="BGR")
-
-class VideoTransformer(VideoTransformerBase):
-    def transform(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-
-        # Get the dimensions of the frame
-        height, width = img.shape[:2]
-
-        # Draw a red circle in the center of the frame
-        center = (width // 2, height // 2)
-        radius = 50
-        color = (0, 0, 255)  # Red color (BGR format)
-        thickness = 2
-        cv2.circle(img, center, radius, color, thickness)
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-
 def infer_uploaded_webcam(conf, model):
-    st.title("Webcam with Red Circle")
+        st.header("Webcam Live Feed")
+        WIDTH = st.sidebar.select_slider('QUALITY (May reduce the speed)', list(range(150, 501, 50)))
+        width = WIDTH
 
-    webrtc_streamer(key="example", video_transformer_factory=VideoTransformer, async_transform=True)
+        @st_session_memo
+        def _load_model(model,
+                       width):  # `width` is not used when loading the model, but is necessary as a cache key.
+            return model
+
+        model = _load_model(model, width)
+
+        def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
+            image = frame.to_ndarray(format="bgr24")
+
+            if model is None:
+                return image
+
+            orig_h, orig_w = image.shape[0:2]
+
+            # cv2.resize used in a forked thread may cause memory leaks
+            input = np.asarray(Image.fromarray(image).resize((width, int(width * orig_h / orig_w))))
+
+            transferred = _display_detected_frames(conf, model, input)
+
+            result = Image.fromarray((transferred * 255).astype(np.uint8))
+            image = np.asarray(result.resize((orig_w, orig_h)))
+            return av.VideoFrame.from_ndarray(image, format="bgr24")
+
+        ctx = webrtc_streamer(
+            key="neural-style-transfer",
+            video_frame_callback=video_frame_callback,
+            rtc_configuration={"iceServers": get_ice_servers()},
+            media_stream_constraints={"video": True, "audio": False},
+        )
 
 
