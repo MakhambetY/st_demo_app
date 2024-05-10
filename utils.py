@@ -170,5 +170,6 @@ def infer_uploaded_webcam(conf, model):
         # Display the detected objects on the frame
         return _display_detected_frames(conf, model, st_frame, frame)
 
-    webrtc_streamer(key="example", video_processor_factory=lambda: transform_frame(st_frame), async_processing=True)
+    webrtc_streamer(key="example", video_processor_factory=lambda frame: transform_frame(frame, st_frame), async_processing=True)
+
 
