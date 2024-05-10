@@ -2,3 +2,5 @@ ultralytics
 opencv-python
 streamlit-webrtc
 aioice
+twilio~=8.1.0
+streamlit-session-memo~=0.3.1
