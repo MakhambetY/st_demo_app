@@ -163,13 +163,12 @@ def infer_uploaded_webcam(conf, model):
     :param model: An instance of the `YOLOv8` class containing the YOLOv8 model.
     :return: None
     """
+    st.header("Webcam Live Feed")
+    stframe = st.empty()
 
-    st_frame = st.empty()
-
-    def transform_frame(frame, st_frame):
-        # Display the detected objects on the frame
-        return _display_detected_frames(conf, model, st_frame, frame)
-
-    webrtc_streamer(key="example", video_processor_factory=lambda frame: transform_frame(frame, st_frame), async_processing=True)
+    webcam = st.camera_input("Webcam")
+    if webcam:
+        # Process the webcam frame
+        frame = _display_detected_frames(conf, model, stframe, webcam)
 
 
