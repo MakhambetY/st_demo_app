@@ -164,29 +164,10 @@ def infer_uploaded_webcam(conf, model):
     :return: None
     """
 
-    try:
-        flag = st.button(
-            label="Stop running"
-        )
-        # vid_cap = cv2.VideoCapture(0)  # local camera
-        st_frame = st.empty()
+    st_frame = st.empty()
 
-        def transform_frame(frame):
-            # Display the detected objects on the frame
-            return _display_detected_frames(conf, model, st_frame, frame) if not flag else frame
+    def transform_frame(frame):
+        # Display the detected objects on the frame
+        return _display_detected_frames(conf, model, st_frame, frame)
 
-        webrtc_streamer(key="example", video_processor_factory=transform_frame if flag else None)
-        # while not flag:
-        # success, image = vid_cap.read()
-        # if success:
-        #     _display_detected_frames(
-        #         conf,
-        #         model,
-        #         st_frame,
-        #         image
-        #     )
-        # else:
-        #     vid_cap.release()
-        #     break
-    except Exception as e:
-        st.error(f"Error loading video: {str(e)}")
+    webrtc_streamer(key="example", video_processor_factory=transform_frame, async_processing=True)
